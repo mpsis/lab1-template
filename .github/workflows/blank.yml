@@ -1,0 +1,60 @@
+name: action
+
+on:
+  [ pull_request_target ]
+
+env:
+   cache-build-name: build-env
+
+jobs:
+  
+  prep:
+    runs-on: self-hosted
+    steps:
+      - name: Git clone 
+        uses: actions/checkout@v2
+        with:
+          ref: master
+      - name: Checkout tools repo
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: resources
+      - name: Prep Cache
+        run: |
+            mkdir build-env;
+            mv resources build-env/;
+            
+            cp -Rr ~/mpsis/lab1-test/* build-env/;
+            ./build-env/scripts/check_artifacts.sh ${{ github.repository }}
+            ./build-env/scripts/prep.sh ${{ github.actor }}
+      - name: Cache
+        uses: actions/cache@v2
+        with:
+          path: ./build-env
+          key: ${{ runner.os }}-${{ github.repository }}-${{ env.cache-build-name }}
+  
+  test1:      
+      needs: [prep]
+      runs-on: self-hosted
+      steps: 
+      - name: Set current time 
+        run: echo "curr_time=$(date +'%H-%M-%S_')" >> $GITHUB_ENV;      
+      - name: Fetch from cache
+        uses: actions/cache@v2
+        with:
+          path: ./build-env
+          key: ${{ runner.os }}-${{ github.repository }}-${{ env.cache-build-name }}
+      - name: Build
+        run: | 
+          ls -la ; echo "--------------";
+          ls -la build-env/; echo "----------------------------------------------";
+          cd build-env/${{ github.actor }}/;
+          ls -la; pwd; 
+          ./ref/rtl/build.sh seed
+      - name: Send_Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.curr_time }}_hackathon_log__${{ github.job }}
+          path: ./build-env/${{ github.actor }}/log.tar.bz2
+          retention-days: 1
